@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, WSO2 Inc. (http://www.wso2.com).
+ * Copyright (c) 2022, WSO2 Inc. (http://www.wso2.com).
  *
  * WSO2 Inc. licenses this file to you under the Apache License,
  * Version 2.0 (the "License"); you may not use this file except
@@ -18,24 +18,78 @@
 
 package org.wso2.carbon.identity.api.otp.service.ivrotp.impl;
 
-import org.wso2.carbon.identity.api.otp.service.ivrotp.*;
-import org.wso2.carbon.identity.api.otp.service.ivrotp.dto.*;
-import java.util.List;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+import org.wso2.carbon.identity.api.otp.service.ivrotp.IvrotpApiService;
+import org.wso2.carbon.identity.api.otp.service.ivrotp.dto.OTPGenerateResponse;
+import org.wso2.carbon.identity.api.otp.service.ivrotp.dto.OTPGenerationRequest;
+import org.wso2.carbon.identity.api.otp.service.ivrotp.dto.OTPValidationFailureReason;
+import org.wso2.carbon.identity.api.otp.service.ivrotp.dto.OTPValidationRequest;
+import org.wso2.carbon.identity.api.otp.service.ivrotp.dto.OTPValidationResponse;
+import org.wso2.carbon.identity.api.otp.service.ivrotp.util.EndpointUtils;
+import org.wso2.carbon.identity.ivrotp.common.dto.FailureReasonDTO;
+import org.wso2.carbon.identity.ivrotp.common.dto.GenerationResponseDTO;
+import org.wso2.carbon.identity.ivrotp.common.dto.ValidationResponseDTO;
+import org.wso2.carbon.identity.ivrotp.common.exception.IVROTPClientException;
+import org.wso2.carbon.identity.ivrotp.common.exception.IVROTPException;
+
 import javax.ws.rs.core.Response;
 
+/**
+ * This class implements the service layer for org.wso2.carbon.identity.api.otp.service.ivrotp.IvrotpApi.
+ */
 public class IvrotpApiServiceImpl implements IvrotpApiService {
 
-    @Override
-    public Response ivrotpGeneratePost(OTPGenerationRequest otPGenerationRequest) {
+    private static final Log log = LogFactory.getLog(IvrotpApiServiceImpl.class);
 
-        // do some magic!
-        return Response.ok().entity("magic!").build();
+    @Override
+    public Response ivrotpGeneratePost(OTPGenerationRequest otpGenerationRequest) {
+
+        String userId = StringUtils.trim(otpGenerationRequest.getUserId());
+        try {
+            GenerationResponseDTO responseDTO = EndpointUtils.getIVROTPService().generateIVROTP(userId);
+            OTPGenerateResponse response = new OTPGenerateResponse()
+                    .transactionId(responseDTO.getTransactionId())
+                    .ivrOTP(responseDTO.getIvrOTP());
+            return Response.ok(response).build();
+        } catch (IVROTPClientException e) {
+            return EndpointUtils.handleBadRequestResponse(e, log);
+        } catch (IVROTPException e) {
+            return EndpointUtils.handleServerErrorResponse(e, log);
+        } catch (Throwable e) {
+            return EndpointUtils.handleUnexpectedServerError(e, log);
+        }
     }
 
     @Override
-    public Response ivrotpValidatePost(OTPValidationRequest otPValidationRequest) {
+    public Response ivrotpValidatePost(OTPValidationRequest otpValidationRequest) {
 
-        // do some magic!
-        return Response.ok().entity("magic!").build();
+        String transactionId = StringUtils.trim(otpValidationRequest.getTransactionId());
+        String userId = StringUtils.trim(otpValidationRequest.getUserId());
+        String ivrOtp = StringUtils.trim(otpValidationRequest.getIvrOTP());
+        try {
+            ValidationResponseDTO responseDTO = EndpointUtils.getIVROTPService().validateIVROTP(
+                    transactionId, userId, ivrOtp);
+            FailureReasonDTO failureReasonDTO = responseDTO.getFailureReason();
+            OTPValidationFailureReason failureReason = null;
+            if (failureReasonDTO != null) {
+                failureReason = new OTPValidationFailureReason()
+                        .code(failureReasonDTO.getCode())
+                        .message(failureReasonDTO.getMessage())
+                        .description(failureReasonDTO.getDescription());
+            }
+            OTPValidationResponse response = new OTPValidationResponse()
+                    .isValid(responseDTO.isValid())
+                    .userId(responseDTO.getUserId())
+                    .failureReason(failureReason);
+            return Response.ok(response).build();
+        } catch (IVROTPClientException e) {
+            return EndpointUtils.handleBadRequestResponse(e, log);
+        } catch (IVROTPException e) {
+            return EndpointUtils.handleServerErrorResponse(e, log);
+        } catch (Throwable e) {
+            return EndpointUtils.handleUnexpectedServerError(e, log);
+        }
     }
 }
